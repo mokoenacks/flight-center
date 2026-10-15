@@ -30,8 +30,10 @@ export function App() {
 
   useEffect(() => {
     const path = window.location.pathname.replace(/\/+$/, '')
-    if (path.toLowerCase() === '/admin' && !isAdmin(window.location.hash)) {
-      window.location.replace(`${window.location.origin}${window.location.search}#/admin`)
+    const params = new URLSearchParams(window.location.search)
+    const recoveryCode = params.has('code')
+    if ((path.toLowerCase() === '/admin' || recoveryCode) && !isAdmin(window.location.hash)) {
+      window.location.hash = '#/admin'
     }
   }, [])
 

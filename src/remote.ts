@@ -17,7 +17,15 @@ const anonKey = (
   'sb_publishable_JsXInJZcvUq71O_vJAC63w_j7bbXney'
 ).trim()
 const client: SupabaseClient | null =
-  url.startsWith('https://') && anonKey.length > 20 ? createClient(url, anonKey) : null
+  url.startsWith('https://') && anonKey.length > 20
+    ? createClient(url, anonKey, {
+        auth: {
+          flowType: 'pkce',
+          detectSessionInUrl: true,
+          persistSession: true,
+        },
+      })
+    : null
 
 const SAVE_ERROR = 'The database did not save. Run supabase/multi-agent.sql in the Supabase SQL editor, then sign in again.'
 const LOAD_ERROR = 'The database did not answer. Check the Supabase URL and publishable key in .env.'
@@ -30,6 +38,7 @@ export type RemoteStatus = {
   configured: boolean
   ready: boolean
   signedIn: boolean
+  recovery: boolean
   email: string
   error: string
   view: 'loading' | 'ready' | 'idle' | 'missing'
@@ -39,6 +48,7 @@ const status: RemoteStatus = {
   configured: client !== null,
   ready: client === null,
   signedIn: false,
+  recovery: false,
   email: '',
   error: '',
   view: client === null ? 'ready' : 'loading',
@@ -199,7 +209,36 @@ export async function signUpDesk(email: string, password: string) {
 
 export async function signOutDesk() {
   if (!client) return
+  status.recovery = false
   await client.auth.signOut()
+}
+
+export function passwordResetReturnUrl() {
+  return `${window.location.origin}/`
+}
+
+export async function sendPasswordReset(email: string) {
+  if (!client) return 'Add the Supabase URL and publishable key to .env, then restart.'
+  const address = email.trim()
+  if (!address.includes('@')) return 'Enter the email on the account.'
+  const { error } = await client.auth.resetPasswordForEmail(address, { redirectTo: passwordResetReturnUrl() })
+  if (!error) return ''
+  if (/redirect/i.test(error.message)) {
+    return 'Supabase blocked the return link. In Authentication, URL Configuration, allow this site, then try again.'
+  }
+  if (/rate|once every/i.test(error.message)) return 'Wait a minute, then ask for another email.'
+  return 'The reset email did not send. Check the address and try again.'
+}
+
+export async function saveNewPassword(password: string) {
+  if (!client) return 'Add the Supabase URL and publishable key to .env, then restart.'
+  if (password.length < 6) return 'Use at least 6 characters for the password.'
+  const { error } = await client.auth.updateUser({ password })
+  if (error) return 'That password was not saved. Ask for a new reset email and try again.'
+  status.recovery = false
+  notify()
+  if (window.location.hash.toLowerCase().startsWith('#/admin')) void openAdmin()
+  return ''
 }
 
 async function boot() {
@@ -215,16 +254,29 @@ async function boot() {
   status.ready = true
   notify()
   client.auth.onAuthStateChange((event, session) => {
-    if (!booted || (event !== 'SIGNED_IN' && event !== 'SIGNED_OUT')) return
+    if (!booted) return
+    if (event === 'PASSWORD_RECOVERY') {
+      status.recovery = true
+      applySession(session?.user.email ?? '', Boolean(session))
+      if (!window.location.hash.toLowerCase().startsWith('#/admin')) window.location.hash = '#/admin'
+      notify()
+      return
+    }
+    if (event !== 'SIGNED_IN' && event !== 'SIGNED_OUT') return
     applySession(session?.user.email ?? '', Boolean(session))
     if (event === 'SIGNED_OUT') {
+      status.recovery = false
       window.clearTimeout(timer)
       unwatch()
       scope = { mode: 'idle', agentId: '', slug: '', userId: '' }
       notify()
       return
     }
-    if (window.location.hash.startsWith('#/admin')) void openAdmin()
+    if (status.recovery) {
+      notify()
+      return
+    }
+    if (window.location.hash.toLowerCase().startsWith('#/admin')) void openAdmin()
   })
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && signedIn && booted && scope.mode === 'admin') void runPush()

@@ -9,7 +9,16 @@ import {
 } from './copy'
 import { addDays, isoDate, money, planMonday, prettyDate, prettyWhen, samePrice, waDigits } from './format'
 import { PLAYBOOKS, seasonTip, strategyName } from './playbooks'
-import { loadViewReport, signInDesk, signOutDesk, signUpDesk, useRemoteStatus, type ViewReport } from './remote'
+import {
+  loadViewReport,
+  saveNewPassword,
+  sendPasswordReset,
+  signInDesk,
+  signOutDesk,
+  signUpDesk,
+  useRemoteStatus,
+  type ViewReport,
+} from './remote'
 import { DEFAULT_TRUST, PALETTES } from './seed'
 import {
   addLead,
@@ -67,6 +76,7 @@ export function Admin() {
     )
   }
 
+  if (remote.configured && remote.recovery) return <ResetPassword email={remote.email} />
   if (remote.configured && !remote.signedIn) return <SignIn />
 
   function openCampaign(id: string) {
@@ -130,14 +140,106 @@ function SignIn() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [sent, setSent] = useState('')
   const [busy, setBusy] = useState(false)
-  const [creating, setCreating] = useState(false)
+  const [mode, setMode] = useState<'signin' | 'create' | 'forgot'>('signin')
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
     setError('')
-    const problem = creating ? await signUpDesk(email, password) : await signInDesk(email, password)
+    setSent('')
+    if (mode === 'forgot') {
+      const problem = await sendPasswordReset(email)
+      setBusy(false)
+      if (problem) setError(problem)
+      else setSent('Check that inbox. The email has a link to choose a new password.')
+      return
+    }
+    const problem = mode === 'create' ? await signUpDesk(email, password) : await signInDesk(email, password)
+    setBusy(false)
+    if (problem) setError(problem)
+  }
+
+  const title = mode === 'create' ? 'Create your desk' : mode === 'forgot' ? 'Reset your password' : 'Sign in'
+  const intro =
+    mode === 'create'
+      ? 'Each consultant gets their own customer link and their own campaigns. Quote emails come to the address you use here.'
+      : mode === 'forgot'
+        ? 'We email a reset link to the address on the account. It opens this desk so you can choose a new password.'
+        : 'Sign in to the desk for your customer link. Quotes sent by email also arrive in your inbox.'
+
+  return (
+    <div className="desk">
+      <main className="workspace">
+        <h1 className="page-title">{title}</h1>
+        <p className="intro">{intro}</p>
+        <form className="panel signin" onSubmit={submit}>
+          <Field label="Email">
+            <input type="email" value={email} autoComplete="username" onChange={(event) => setEmail(event.target.value)} />
+          </Field>
+          {mode !== 'forgot' && (
+            <Field label="Password">
+              <input
+                type="password"
+                value={password}
+                autoComplete={mode === 'create' ? 'new-password' : 'current-password'}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </Field>
+          )}
+          {error && <p className="warnline">{error}</p>}
+          {sent && <p className="fine">{sent}</p>}
+          <div className="actions">
+            <button className="btn sea" type="submit" disabled={busy || !email.trim() || (mode !== 'forgot' && !password)}>
+              {busy ? 'Please wait…' : mode === 'create' ? 'Create account' : mode === 'forgot' ? 'Email me a reset link' : 'Sign in'}
+            </button>
+            {mode === 'signin' && (
+              <button
+                className="btn quiet"
+                type="button"
+                onClick={() => {
+                  setMode('forgot')
+                  setError('')
+                  setSent('')
+                }}
+              >
+                Forgot password
+              </button>
+            )}
+            <button
+              className="btn quiet"
+              type="button"
+              onClick={() => {
+                setMode(mode === 'create' ? 'signin' : mode === 'forgot' ? 'signin' : 'create')
+                setError('')
+                setSent('')
+              }}
+            >
+              {mode === 'signin' ? 'Create an account' : 'Back to sign in'}
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+  )
+}
+
+function ResetPassword({ email }: { email: string }) {
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (password !== confirm) {
+      setError('Type the same password in both boxes.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    const problem = await saveNewPassword(password)
     setBusy(false)
     if (problem) setError(problem)
   }
@@ -145,31 +247,32 @@ function SignIn() {
   return (
     <div className="desk">
       <main className="workspace">
-        <h1 className="page-title">{creating ? 'Create your desk' : 'Sign in'}</h1>
+        <h1 className="page-title">Choose a new password</h1>
         <p className="intro">
-          {creating
-            ? 'Each consultant gets their own customer link and their own campaigns. Quote emails come to the address you use here.'
-            : 'Sign in to the desk for your customer link. Quotes sent by email also arrive in your inbox.'}
+          {email ? `This reset is for ${email}. ` : ''}
+          After you save it, this desk opens with the new password.
         </p>
         <form className="panel signin" onSubmit={submit}>
-          <Field label="Email">
-            <input type="email" value={email} autoComplete="username" onChange={(event) => setEmail(event.target.value)} />
-          </Field>
-          <Field label="Password">
+          <Field label="New password">
             <input
               type="password"
               value={password}
-              autoComplete="current-password"
+              autoComplete="new-password"
               onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+          <Field label="Repeat the password">
+            <input
+              type="password"
+              value={confirm}
+              autoComplete="new-password"
+              onChange={(event) => setConfirm(event.target.value)}
             />
           </Field>
           {error && <p className="warnline">{error}</p>}
           <div className="actions">
-            <button className="btn sea" type="submit" disabled={busy || !email.trim() || !password}>
-              {busy ? 'Please wait…' : creating ? 'Create account' : 'Sign in'}
-            </button>
-            <button className="btn quiet" type="button" onClick={() => { setCreating((value) => !value); setError('') }}>
-              {creating ? 'I already have an account' : 'Create an account'}
+            <button className="btn sea" type="submit" disabled={busy || password.length < 6 || !confirm}>
+              {busy ? 'Please wait…' : 'Save password'}
             </button>
           </div>
         </form>
