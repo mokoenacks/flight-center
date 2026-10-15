@@ -213,8 +213,10 @@ export async function signOutDesk() {
   await client.auth.signOut()
 }
 
+const PUBLIC_SITE = 'https://flight-center.onrender.com'
+
 export function passwordResetReturnUrl() {
-  return `${window.location.origin}/`
+  return `${PUBLIC_SITE}/`
 }
 
 export async function sendPasswordReset(email: string) {
@@ -237,7 +239,7 @@ export async function saveNewPassword(password: string) {
   if (error) return 'That password was not saved. Ask for a new reset email and try again.'
   status.recovery = false
   notify()
-  if (window.location.hash.toLowerCase().startsWith('#/admin')) void openAdmin()
+  window.location.hash = '#/admin'
   return ''
 }
 
@@ -258,7 +260,7 @@ async function boot() {
     if (event === 'PASSWORD_RECOVERY') {
       status.recovery = true
       applySession(session?.user.email ?? '', Boolean(session))
-      if (!window.location.hash.toLowerCase().startsWith('#/admin')) window.location.hash = '#/admin'
+      if (!window.location.hash.toLowerCase().startsWith('#/reset')) window.location.hash = '#/reset'
       notify()
       return
     }

@@ -1,12 +1,52 @@
 import { useEffect, useState } from 'react'
-import { Admin } from './Admin'
-import { openAdmin, openCustomer, openIdle } from './remote'
+import { Admin, ResetPassword } from './Admin'
+import { openAdmin, openCustomer, openIdle, useRemoteStatus } from './remote'
 import { useDesk } from './store'
 import { Storefront } from './Storefront'
 import { Terms } from './Terms'
 
 function isAdmin(hash: string) {
   return hash.toLowerCase().startsWith('#/admin')
+}
+
+function ResetPage() {
+  const remote = useRemoteStatus()
+  const [fromEmail] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    const current = window.location.hash
+    return params.has('code') || current.includes('type=recovery') || current.includes('access_token')
+  })
+  const [giveUp, setGiveUp] = useState(false)
+
+  useEffect(() => {
+    if (!fromEmail) return
+    const timer = window.setTimeout(() => setGiveUp(true), 8000)
+    return () => window.clearTimeout(timer)
+  }, [fromEmail])
+
+  if (remote.recovery) return <ResetPassword email={remote.email} />
+  const opening = fromEmail && !giveUp
+  return (
+    <div className="desk">
+      <main className="workspace">
+        <h1 className="page-title">{opening ? 'Opening your reset link…' : 'This reset link has expired'}</h1>
+        <p className="intro">
+          {opening
+            ? 'Supabase is checking the email link.'
+            : 'Ask for a new link from the sign-in page. The old one can only be used once.'}
+        </p>
+        {!opening && (
+          <p>
+            <a href="#/admin">Back to sign in</a>
+          </p>
+        )}
+      </main>
+    </div>
+  )
+}
+
+function isReset(hash: string) {
+  return hash.toLowerCase().startsWith('#/reset')
 }
 
 function isTerms(hash: string) {
@@ -31,8 +71,12 @@ export function App() {
   useEffect(() => {
     const path = window.location.pathname.replace(/\/+$/, '')
     const params = new URLSearchParams(window.location.search)
-    const recoveryCode = params.has('code')
-    if ((path.toLowerCase() === '/admin' || recoveryCode) && !isAdmin(window.location.hash)) {
+    const hash = window.location.hash
+    const tokenInHash = hash.includes('access_token') || hash.includes('type=recovery')
+    if (!tokenInHash && params.has('code') && !isReset(hash)) {
+      window.location.hash = '#/reset'
+    }
+    if (path.toLowerCase() === '/admin' && !isAdmin(hash) && !tokenInHash) {
       window.location.hash = '#/admin'
     }
   }, [])
@@ -40,6 +84,7 @@ export function App() {
   useEffect(() => {
     window.scrollTo(0, 0)
     if (isAdmin(hash)) void openAdmin()
+    else if (isReset(hash)) return
     else if (!isTerms(hash)) {
       const slug = readSlug(hash)
       if (slug) void openCustomer(slug)
@@ -48,13 +93,16 @@ export function App() {
   }, [hash])
 
   useEffect(() => {
-    document.title = isAdmin(hash)
-      ? `Agent desk · ${desk.settings.agencyName}`
-      : isTerms(hash)
-        ? 'Terms'
-        : desk.settings.agencyName
+    document.title = isReset(hash)
+      ? 'Reset password'
+      : isAdmin(hash)
+        ? `Agent desk · ${desk.settings.agencyName}`
+        : isTerms(hash)
+          ? 'Terms'
+          : desk.settings.agencyName
   }, [hash, desk.settings.agencyName])
 
+  if (isReset(hash)) return <ResetPage />
   if (isAdmin(hash)) return <Admin />
   if (isTerms(hash)) return <Terms />
   return <Storefront />

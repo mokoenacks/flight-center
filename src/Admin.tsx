@@ -225,7 +225,7 @@ function SignIn() {
   )
 }
 
-function ResetPassword({ email }: { email: string }) {
+export function ResetPassword({ email }: { email: string }) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
