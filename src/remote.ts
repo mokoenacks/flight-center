@@ -213,7 +213,7 @@ export async function signOutDesk() {
   await client.auth.signOut()
 }
 
-const PUBLIC_SITE = 'https://flight-center.onrender.com'
+const PUBLIC_SITE = 'https://flightangel.onrender.com'
 
 export function passwordResetReturnUrl() {
   return `${PUBLIC_SITE}/`

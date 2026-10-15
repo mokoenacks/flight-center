@@ -69,7 +69,7 @@ export function Admin() {
     return (
       <div className="desk">
         <main className="workspace">
-          <h1 className="page-title">Flight Desk</h1>
+          <h1 className="page-title">FlightAngel</h1>
           <p className="intro">Opening the database…</p>
         </main>
       </div>
@@ -88,7 +88,7 @@ export function Admin() {
     <div className="desk">
       <aside className="rail">
         <div className="mark">
-          <strong>Flight Desk</strong>
+          <strong>FlightAngel</strong>
           <em>Sell the week</em>
         </div>
         {TABS.map((item) => (
@@ -1280,7 +1280,7 @@ function Contacts() {
                     })
                     setMessage('Backup imported.')
                   })
-                  .catch(() => setMessage('That file is not a Flight Desk backup.'))
+                  .catch(() => setMessage('That file is not a FlightAngel backup.'))
               }}
             />
           </label>
