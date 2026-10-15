@@ -97,9 +97,7 @@ export function App() {
     document.title = isReset(hash)
       ? 'Reset password · FlightAngel'
       : isAdmin(hash)
-        ? agency
-          ? `FlightAngel · ${agency}`
-          : 'FlightAngel'
+        ? 'FlightAngel'
         : isTerms(hash)
           ? 'Terms · FlightAngel'
           : agency
