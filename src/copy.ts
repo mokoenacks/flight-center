@@ -359,7 +359,17 @@ export function bioLink(settings: Settings) {
 }
 
 export function quoteMessage(
-  lead: { name: string; from: string; to: string; dates: string; travellers: string; kind: string; notes: string },
+  lead: {
+    name: string
+    from: string
+    to: string
+    dates: string
+    travellers: string
+    kind: string
+    notes: string
+    phone?: string
+    email?: string
+  },
   settings: Settings,
 ) {
   const kind = lead.kind === 'unsure' ? 'trip' : lead.kind
@@ -368,6 +378,8 @@ export function quoteMessage(
     `Please quote a ${kind} to ${lead.to} from ${lead.from || settings.city}.`,
     lead.dates ? `Dates: ${lead.dates}.` : '',
     `Travellers: ${lead.travellers || 'not sure yet'}.`,
+    lead.phone?.trim() ? `My number is ${lead.phone.trim()}.` : '',
+    lead.email?.trim() ? `My email is ${lead.email.trim()}.` : '',
     lead.notes.trim(),
   ]
     .filter(Boolean)

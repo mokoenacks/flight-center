@@ -9,6 +9,7 @@ import {
 } from './copy'
 import { addDays, isoDate, money, planMonday, prettyDate, prettyWhen, samePrice, waDigits } from './format'
 import { PLAYBOOKS, seasonTip, strategyName } from './playbooks'
+import { loadViewReport, signInDesk, signOutDesk, signUpDesk, useRemoteStatus, type ViewReport } from './remote'
 import { DEFAULT_TRUST, PALETTES } from './seed'
 import {
   addLead,
@@ -49,10 +50,24 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function Admin() {
   const desk = useDesk()
+  const remote = useRemoteStatus()
   const [tab, setTab] = useState<Tab>('today')
   const [campaignId, setCampaignId] = useState<string | null>(null)
   const [flash, setFlash] = useState('')
   const newLeads = desk.leads.filter((lead) => lead.stage === 'new').length
+
+  if (remote.configured && !remote.ready) {
+    return (
+      <div className="desk">
+        <main className="workspace">
+          <h1 className="page-title">Flight Desk</h1>
+          <p className="intro">Opening the database…</p>
+        </main>
+      </div>
+    )
+  }
+
+  if (remote.configured && !remote.signedIn) return <SignIn />
 
   function openCampaign(id: string) {
     setCampaignId(id)
@@ -72,11 +87,34 @@ export function Admin() {
             {item.id === 'leads' && newLeads > 0 ? ` (${newLeads})` : ''}
           </button>
         ))}
-        <a className="rail-link" href="#/">
-          View customer page
-        </a>
+        <div className="rail-foot">
+          <a className="rail-link" href={desk.slug ? `#/a/${desk.slug}` : '#/admin'}>
+            View customer page
+          </a>
+          {remote.signedIn && (
+            <button type="button" onClick={() => void signOutDesk()}>
+              Sign out
+            </button>
+          )}
+        </div>
       </aside>
       <main className="workspace">
+        {!remote.configured && (
+          <p className="warnline">
+            Database not connected yet. Run supabase/schema.sql in the Supabase SQL editor, put the URL and anon key in
+            .env, then restart.
+          </p>
+        )}
+        {remote.configured && remote.signedIn && desk.slug && (
+          <p className="fine">Signed in{remote.email ? ` as ${remote.email}` : ''}. This account has its own page and campaigns.</p>
+        )}
+        {remote.signedIn && !desk.slug && (
+          <p className="warnline">
+            Run supabase/multi-agent.sql in the Supabase SQL editor, then refresh. That gives every consultant their own
+            link and keeps their campaigns separate.
+          </p>
+        )}
+        {remote.error && <p className="warnline">{remote.error}</p>}
         {tab === 'today' && <Today flash={flash} setFlash={setFlash} onOpen={openCampaign} />}
         {tab === 'offers' && <Offers />}
         {tab === 'campaigns' && <Campaigns campaignId={campaignId} setCampaignId={setCampaignId} />}
@@ -85,6 +123,117 @@ export function Admin() {
         {tab === 'settings' && <Contacts />}
       </main>
     </div>
+  )
+}
+
+function SignIn() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [creating, setCreating] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const problem = creating ? await signUpDesk(email, password) : await signInDesk(email, password)
+    setBusy(false)
+    if (problem) setError(problem)
+  }
+
+  return (
+    <div className="desk">
+      <main className="workspace">
+        <h1 className="page-title">{creating ? 'Create your desk' : 'Sign in'}</h1>
+        <p className="intro">
+          {creating
+            ? 'Each consultant gets their own customer link and their own campaigns. Quote emails come to the address you use here.'
+            : 'Sign in to the desk for your customer link. Quotes sent by email also arrive in your inbox.'}
+        </p>
+        <form className="panel signin" onSubmit={submit}>
+          <Field label="Email">
+            <input type="email" value={email} autoComplete="username" onChange={(event) => setEmail(event.target.value)} />
+          </Field>
+          <Field label="Password">
+            <input
+              type="password"
+              value={password}
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+          {error && <p className="warnline">{error}</p>}
+          <div className="actions">
+            <button className="btn sea" type="submit" disabled={busy || !email.trim() || !password}>
+              {busy ? 'Please wait…' : creating ? 'Create account' : 'Sign in'}
+            </button>
+            <button className="btn quiet" type="button" onClick={() => { setCreating((value) => !value); setError('') }}>
+              {creating ? 'I already have an account' : 'Create an account'}
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+  )
+}
+
+function VisitorReport() {
+  const remote = useRemoteStatus()
+  const [report, setReport] = useState<ViewReport | null | undefined>(undefined)
+
+  useEffect(() => {
+    if (!remote.signedIn) return
+    let live = true
+    void loadViewReport().then((next) => {
+      if (live) setReport(next)
+    })
+    return () => {
+      live = false
+    }
+  }, [remote.signedIn])
+
+  return (
+    <section className="panel">
+      <h2>Website visits</h2>
+      <p>
+        Your page counts people who open your customer link. The opening page and the terms page are counted for the
+        whole website. A refresh does not add another visit. These numbers stay after you host the site on Render.
+      </p>
+      {!remote.configured && (
+        <p className="warnline">Connect Supabase to start the count. The report reads from that database.</p>
+      )}
+      {remote.configured && report === undefined && <p>Counting…</p>}
+      {remote.configured && report === null && (
+        <p className="warnline">Run supabase/views.sql in the Supabase SQL editor, then refresh.</p>
+      )}
+      {report && (
+        <>
+          <div className="stats">
+            <article className="stat">
+              <b>{report.pageViews}</b>
+              <span>Views of your page</span>
+            </article>
+            <article className="stat">
+              <b>{report.pageVisitors}</b>
+              <span>Visitors on your page</span>
+            </article>
+            <article className="stat">
+              <b>{report.homeViews + report.termsViews}</b>
+              <span>Opening page and terms</span>
+            </article>
+          </div>
+          <div className="view-days">
+            {report.days.map((day) => (
+              <div key={day.day}>
+                <b>{day.views}</b>
+                <span>{day.label}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 
@@ -137,6 +286,21 @@ function Today({
         <h2>{season.title}</h2>
         <p>{season.detail}</p>
       </section>
+
+      <section className="panel">
+        <h2>Your customer page</h2>
+        <p>This link shows only your offers and your campaigns. Quotes from it are saved here, and email quotes are also sent to your inbox.</p>
+        {settings.slug ? (
+          <div className="actions">
+            <code className="linkbox">{`${window.location.origin}${window.location.pathname}#/a/${settings.slug}`}</code>
+            <CopyButton text={`${window.location.origin}${window.location.pathname}#/a/${settings.slug}`} label="Copy page link" />
+          </div>
+        ) : (
+          <p className="warnline">Save a link name under Contacts. That becomes your customer page.</p>
+        )}
+      </section>
+
+      <VisitorReport />
 
       <section className="panel">
         <h2>Share one link</h2>
@@ -484,7 +648,7 @@ function Editor({ campaign }: { campaign: Campaign }) {
 
   function openChannel(channel: Channel, body: string) {
     if (channel === 'site') {
-      window.location.hash = '#/'
+      window.location.hash = desk.slug ? `#/a/${desk.slug}` : '#/'
       return
     }
     if (channel === 'whatsapp') {
@@ -885,8 +1049,13 @@ function Contacts() {
 
   function save(event: FormEvent) {
     event.preventDefault()
-    saveSettings(draft)
-    setMessage('Saved. Posts still in sync now use these contact details.')
+    const slug = draft.slug.trim().toLowerCase()
+    if (!/^[a-z0-9-]{3,40}$/.test(slug) || slug === 'admin' || slug === 'a') {
+      setMessage('Use a link name of 3 to 40 letters, numbers, or dashes.')
+      return
+    }
+    saveSettings({ ...draft, slug })
+    setMessage('Saved. Your customer page and in-sync posts now use these details. Email quotes come to this inbox.')
   }
 
   function exportBackup() {
@@ -908,6 +1077,13 @@ function Contacts() {
       </p>
       <form className="panel" onSubmit={save}>
         <div className="grid-2">
+          <Field label="Link name">
+            <input
+              value={draft.slug}
+              placeholder="jane"
+              onChange={(event) => set('slug', event.target.value.toLowerCase())}
+            />
+          </Field>
           <Field label="Agency name">
             <input value={draft.agencyName} onChange={(event) => set('agencyName', event.target.value)} />
           </Field>
@@ -930,7 +1106,7 @@ function Contacts() {
           <Field label="Phone">
             <input value={draft.phone} onChange={(event) => set('phone', event.target.value)} />
           </Field>
-          <Field label="Email">
+          <Field label="Email for quote reminders">
             <input value={draft.email} onChange={(event) => set('email', event.target.value)} />
           </Field>
           <Field label="Instagram">
@@ -993,7 +1169,12 @@ function Contacts() {
                   .then((text) => {
                     const parsed: unknown = JSON.parse(text)
                     if (!isDeskState(parsed)) throw new Error('bad')
-                    commit(parsed)
+                    commit({
+                      ...parsed,
+                      agentId: desk.agentId,
+                      slug: desk.slug,
+                      settings: { ...parsed.settings, slug: desk.slug },
+                    })
                     setMessage('Backup imported.')
                   })
                   .catch(() => setMessage('That file is not a Flight Desk backup.'))

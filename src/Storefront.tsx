@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { quoteMessage, waLink } from './copy'
 import { money, waDigits } from './format'
 import { PALETTES } from './seed'
-import { addLead, useDesk } from './store'
+import { recordView, useRemoteStatus } from './remote'
+import { addLead, ensureLeadSaved, useDesk } from './store'
 import type { Offer, TripKind } from './types'
 import { KIND_LABEL } from './types'
 import { Field } from './ui'
@@ -16,6 +17,8 @@ const FILTERS: { id: TripKind | 'all'; label: string }[] = [
   { id: 'cruise', label: 'Cruises' },
   { id: 'car', label: 'Cars' },
 ]
+
+type SendChannel = 'whatsapp' | 'email' | 'both'
 
 type QuoteForm = {
   name: string
@@ -31,10 +34,15 @@ type QuoteForm = {
 
 export function Storefront() {
   const desk = useDesk()
+  const remote = useRemoteStatus()
   const { settings, offers, campaigns } = desk
   const [filter, setFilter] = useState<TripKind | 'all'>('all')
   const [error, setError] = useState('')
   const [sent, setSent] = useState('')
+  const [dialog, setDialog] = useState<Offer | null>(null)
+  const [dialogError, setDialogError] = useState('')
+  const [dialogSent, setDialogSent] = useState('')
+  const [dialogForm, setDialogForm] = useState<QuoteForm | null>(null)
   const [form, setForm] = useState<QuoteForm>(() => ({
     name: '',
     phone: '',
@@ -68,29 +76,65 @@ export function Storefront() {
   }
 
   function quoteThis(offer: Offer) {
-    setForm((current) => ({
-      ...current,
+    setDialog(offer)
+    setDialogError('')
+    setDialogSent('')
+    setDialogForm({
+      ...form,
       to: offer.destination,
-      from: offer.departFrom || current.from,
+      from: offer.departFrom || form.from,
       kind: offer.kind,
-    }))
-    document.getElementById('quote')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }
 
-  async function onSubmit(event: FormEvent) {
+  function closeDialog() {
+    setDialog(null)
+    setDialogForm(null)
+  }
+
+  useEffect(() => {
+    if (!dialog) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeDialog()
+    }
+    document.addEventListener('keydown', onKey)
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+    }
+  }, [dialog])
+
+  async function submitQuote(
+    event: FormEvent,
+    values: QuoteForm,
+    channel: SendChannel,
+    report: { setError: (value: string) => void; setSent: (value: string) => void },
+  ) {
     event.preventDefault()
-    if (!form.name.trim() || !form.to.trim()) {
-      setError('Add your name and where you want to go.')
-      setSent('')
+    if (!values.name.trim() || !values.to.trim()) {
+      report.setError('Add your name and where you want to go.')
+      report.setSent('')
       return
     }
-    if (!form.phone.trim() && !form.email.trim()) {
-      setError('Add a phone number or an email so we can reply.')
-      setSent('')
+    const hasPhone = Boolean(values.phone.trim())
+    const hasEmail = Boolean(values.email.trim())
+    if (!hasPhone && !hasEmail) {
+      report.setError('Add a phone number or an email so we can reply.')
+      report.setSent('')
       return
     }
-    setError('')
-    const saved = addLead({ ...form, source: 'Customer page' })
+    const sendWhatsapp = hasPhone && (channel === 'whatsapp' || channel === 'both')
+    const sendEmail = hasEmail && (channel === 'email' || channel === 'both')
+    report.setError('')
+    const source =
+      sendWhatsapp && sendEmail
+        ? 'Customer page · WhatsApp and email'
+        : sendEmail
+          ? 'Customer page · Email'
+          : 'Customer page · WhatsApp'
+    const saved = addLead({ ...values, source })
     let webhookNote = ''
     if (settings.leadWebhook.trim()) {
       try {
@@ -103,19 +147,59 @@ export function Storefront() {
         webhookNote = ' The webhook did not answer.'
       }
     }
-    const text = quoteMessage(form, settings)
-    if (waDigits(settings.whatsapp)) {
-      window.open(waLink(settings.whatsapp, text), '_blank', 'noopener')
-      setSent(`WhatsApp should have opened with your trip filled in. Send the message.${webhookNote}`)
-    } else if (settings.email.trim()) {
-      window.location.href = `mailto:${settings.email.trim()}?subject=${encodeURIComponent(`Quote for ${form.to}`)}&body=${encodeURIComponent(text)}`
-      setSent(`Your email app should have opened.${webhookNote}`)
-    } else {
-      setSent(`Saved on this computer. Add a WhatsApp number in the agent desk before you share this page.${webhookNote}`)
+    const problem = await ensureLeadSaved(saved, sendEmail)
+    if (sendWhatsapp) window.open(waLink(settings.whatsapp, quoteMessage(values, settings)), '_blank', 'noopener')
+    if (problem) {
+      report.setError(problem)
+      if (sendWhatsapp) report.setSent('WhatsApp should have opened with your trip filled in. Send the message.')
+      return
     }
+    const sentNote = sendWhatsapp && sendEmail
+      ? 'WhatsApp should have opened with your trip filled in. Send that message. We also emailed your consultant.'
+      : sendEmail
+        ? 'We emailed your consultant. They will reply to the address you gave.'
+        : 'WhatsApp should have opened with your trip filled in. Send the message.'
+    report.setSent(`${sentNote}${webhookNote}`)
   }
 
   const offer = hero.offer
+
+  useEffect(() => {
+    if (!remote.configured || remote.view === 'loading') return
+    if (remote.view === 'ready' && desk.agentId) {
+      recordView('customer', desk.agentId)
+      return
+    }
+    if (remote.view === 'idle' || remote.view === 'missing') recordView('home')
+  }, [remote.configured, remote.view, desk.agentId])
+
+  if (remote.configured && remote.view === 'loading') {
+    return (
+      <div className="store">
+        <main className="gate">
+          <h1>Opening this desk…</h1>
+        </main>
+      </div>
+    )
+  }
+
+  if (remote.configured && (remote.view === 'idle' || remote.view === 'missing' || !desk.agentId)) {
+    return (
+      <div className="store">
+        <main className="gate">
+          <h1>{remote.view === 'missing' ? 'This link is not active' : 'Ask your consultant for their link'}</h1>
+          <p className="lede">
+            {remote.view === 'missing'
+              ? 'That customer page is not linked to a consultant yet.'
+              : 'Each consultant has their own page. Open the link they sent you.'}
+          </p>
+          <p>
+            <a href="#/terms">Terms</a>
+          </p>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="store">
@@ -135,7 +219,7 @@ export function Storefront() {
           <a href="#how">How it works</a>
           <a href="#journal">This week</a>
           <a href="#quote">Get a quote</a>
-          {settings.preview && <a href="#/admin">Agent desk</a>}
+          <a href="#/terms">Terms</a>
         </nav>
       </header>
 
@@ -191,81 +275,10 @@ export function Storefront() {
         </section>
       ) : (
         <section className="panel">
-          <h1>Add an offer</h1>
-          <p>The customer page is empty until the agent desk has at least one trip.</p>
-          <a className="btn sea" href="#/admin">
-            Open the agent desk
-          </a>
+          <h1>Trips coming soon</h1>
+          <p>Send a quote below and we will suggest somewhere that fits.</p>
         </section>
       )}
-
-      <section className="quote-panel" id="quote">
-        <div>
-          <h2>Tell us the trip. We check the fare.</h2>
-          <p className="intro">
-            This is a quote, not a live flight search. You get a person, a price, and what is included — before you pay.
-          </p>
-        </div>
-        <form onSubmit={onSubmit}>
-          <div className="grid-2">
-            <Field label="Your name">
-              <input value={form.name} onChange={(event) => set('name', event.target.value)} autoComplete="name" />
-            </Field>
-            <Field label="WhatsApp or phone">
-              <input value={form.phone} onChange={(event) => set('phone', event.target.value)} autoComplete="tel" />
-            </Field>
-            <Field label="Email">
-              <input
-                type="email"
-                value={form.email}
-                onChange={(event) => set('email', event.target.value)}
-                autoComplete="email"
-              />
-            </Field>
-            <Field label="Leaving from">
-              <input value={form.from} onChange={(event) => set('from', event.target.value)} />
-            </Field>
-            <Field label="Where to">
-              <input value={form.to} onChange={(event) => set('to', event.target.value)} />
-            </Field>
-            <Field label="When">
-              <input
-                value={form.dates}
-                placeholder="12–20 Dec, or flexible"
-                onChange={(event) => set('dates', event.target.value)}
-              />
-            </Field>
-            <Field label="Travellers">
-              <input value={form.travellers} onChange={(event) => set('travellers', event.target.value)} />
-            </Field>
-            <Field label="Trip type">
-              <select value={form.kind} onChange={(event) => set('kind', event.target.value as QuoteForm['kind'])}>
-                <option value="unsure">Not sure yet</option>
-                <option value="flight">Flight</option>
-                <option value="holiday">Holiday</option>
-                <option value="tour">Tour</option>
-                <option value="cruise">Cruise</option>
-                <option value="car">Car</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="Anything we should know">
-            <textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} rows={3} />
-          </Field>
-          {error && <p className="warnline">{error}</p>}
-          {sent && <p className="success">{sent}</p>}
-          <div className="actions">
-            <button className="btn solid" type="submit">
-              {waDigits(settings.whatsapp) ? 'WhatsApp this quote' : 'Request a quote'}
-            </button>
-          </div>
-          <p className="fine">
-            {waDigits(settings.whatsapp)
-              ? 'WhatsApp opens with the trip written out. On this computer the enquiry is also saved for follow-up.'
-              : 'This saves the enquiry on this computer. Add a WhatsApp number before you put the page in a bio.'}
-          </p>
-        </form>
-      </section>
 
       <section id="deals">
         <div className="section-head">
@@ -353,12 +366,25 @@ export function Storefront() {
         </section>
       )}
 
+      <section className="quote-panel" id="quote">
+        <QuoteFormFields
+          form={form}
+          onChange={set}
+          error={error}
+          sent={sent}
+          title="Tell us the trip. We check the fare."
+          intro="Quote any destination, even one that is not listed above. This is a person checking the fare, before you pay."
+          onSubmit={(event, channel) => submitQuote(event, form, channel, { setError, setSent })}
+        />
+      </section>
+
       <footer className="footer">
         <div>
           <strong>{settings.agencyName}</strong>
           <p>{settings.bio}</p>
         </div>
         <div className="footer-links">
+          <a href="#/terms">Terms</a>
           {settings.phone.trim() && <a href={`tel:${settings.phone}`}>{settings.phone}</a>}
           {settings.email.trim() && <a href={`mailto:${settings.email}`}>{settings.email}</a>}
           {waDigits(settings.whatsapp) && (
@@ -386,7 +412,6 @@ export function Storefront() {
               Facebook
             </a>
           )}
-          <a href="#/admin">Agent desk</a>
         </div>
       </footer>
 
@@ -401,7 +426,179 @@ export function Storefront() {
         )}
         {settings.phone.trim() ? <a href={`tel:${settings.phone}`}>Call</a> : <a href={`mailto:${settings.email}`}>Email</a>}
       </div>
+
+      {dialog && dialogForm && (
+        <div className="modal-back" onClick={closeDialog}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quote-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <QuoteFormFields
+              idPrefix="dialog"
+              form={dialogForm}
+              onChange={(key, value) => setDialogForm((current) => (current ? { ...current, [key]: value } : current))}
+              error={dialogError}
+              sent={dialogSent}
+              title={`Quote ${dialog.destination}`}
+              titleId="quote-dialog-title"
+              intro={`${KIND_LABEL[dialog.kind]} from ${money(dialog.priceFrom)}. ${dialog.nights}${dialog.departFrom ? ` · leaving ${dialog.departFrom}` : ''}.`}
+              onSubmit={(event, channel) =>
+                submitQuote(event, dialogForm, channel, { setError: setDialogError, setSent: setDialogSent })
+              }
+              onClose={closeDialog}
+            />
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function QuoteFormFields({
+  form,
+  onChange,
+  error,
+  sent,
+  title,
+  intro,
+  onSubmit,
+  onClose,
+  titleId,
+  idPrefix = 'page',
+}: {
+  form: QuoteForm
+  onChange: <K extends keyof QuoteForm>(key: K, value: QuoteForm[K]) => void
+  error: string
+  sent: string
+  title: string
+  intro: string
+  onSubmit: (event: FormEvent, channel: SendChannel) => void
+  onClose?: () => void
+  titleId?: string
+  idPrefix?: string
+}) {
+  const hasPhone = Boolean(form.phone.trim())
+  const hasEmail = Boolean(form.email.trim())
+  return (
+    <>
+      <div className="modal-head">
+        <div>
+          <h2 id={titleId}>{title}</h2>
+          <p className="intro">{intro}</p>
+        </div>
+        {onClose && (
+          <button type="button" className="btn small quiet" onClick={onClose}>
+            Close
+          </button>
+        )}
+      </div>
+      <form
+        onSubmit={(event) => {
+          const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
+          const picked = submitter?.value
+          const channel: SendChannel =
+            picked === 'email' || picked === 'both' || picked === 'whatsapp'
+              ? picked
+              : hasPhone
+                ? 'whatsapp'
+                : 'email'
+          onSubmit(event, channel)
+        }}
+      >
+        <div className="grid-2">
+          <Field label="Your name">
+            <input
+              id={`${idPrefix}-name`}
+              value={form.name}
+              onChange={(event) => onChange('name', event.target.value)}
+              autoComplete="name"
+              autoFocus={Boolean(onClose)}
+            />
+          </Field>
+          <Field label="WhatsApp or phone">
+            <input
+              value={form.phone}
+              onChange={(event) => onChange('phone', event.target.value)}
+              autoComplete="tel"
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              type="email"
+              value={form.email}
+              onChange={(event) => onChange('email', event.target.value)}
+              autoComplete="email"
+            />
+          </Field>
+          <Field label="Leaving from">
+            <input value={form.from} onChange={(event) => onChange('from', event.target.value)} />
+          </Field>
+          <Field label="Where to">
+            <input value={form.to} onChange={(event) => onChange('to', event.target.value)} />
+          </Field>
+          <Field label="When">
+            <input
+              value={form.dates}
+              placeholder="12–20 Dec, or flexible"
+              onChange={(event) => onChange('dates', event.target.value)}
+            />
+          </Field>
+          <Field label="Travellers">
+            <input value={form.travellers} onChange={(event) => onChange('travellers', event.target.value)} />
+          </Field>
+          <Field label="Trip type">
+            <select value={form.kind} onChange={(event) => onChange('kind', event.target.value as QuoteForm['kind'])}>
+              <option value="unsure">Not sure yet</option>
+              <option value="flight">Flight</option>
+              <option value="holiday">Holiday</option>
+              <option value="tour">Tour</option>
+              <option value="cruise">Cruise</option>
+              <option value="car">Car</option>
+            </select>
+          </Field>
+        </div>
+        <Field label="Anything we should know">
+          <textarea value={form.notes} onChange={(event) => onChange('notes', event.target.value)} rows={3} />
+        </Field>
+        {error && <p className="warnline">{error}</p>}
+        {sent && <p className="success">{sent}</p>}
+        {hasPhone && hasEmail && <p className="fine">Choose how to send this quote.</p>}
+        <div className="actions">
+          {hasPhone && (
+            <button className="btn solid" type="submit" value="whatsapp">
+              Send on WhatsApp
+            </button>
+          )}
+          {hasEmail && (
+            <button className={hasPhone ? 'btn sea' : 'btn solid'} type="submit" value="email">
+              Send by email
+            </button>
+          )}
+          {hasPhone && hasEmail && (
+            <button className="btn quiet" type="submit" value="both">
+              Send both
+            </button>
+          )}
+          {!hasPhone && !hasEmail && (
+            <button className="btn solid" type="submit" value="whatsapp">
+              Request a quote
+            </button>
+          )}
+        </div>
+        <p className="fine">
+          {hasPhone && hasEmail
+            ? 'A number opens WhatsApp. An email is sent to the consultant on this page. Both does each.'
+            : hasPhone
+              ? 'WhatsApp opens with your trip written out. Send it and we will reply.'
+              : hasEmail
+                ? 'We email the consultant on this page. They reply to the address you entered.'
+                : 'Add a number, an email, or both.'}
+        </p>
+      </form>
+    </>
   )
 }
 

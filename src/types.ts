@@ -95,6 +95,7 @@ export type Lead = {
 }
 
 export type Settings = {
+  slug: string
   agencyName: string
   agentName: string
   tagline: string
@@ -113,6 +114,8 @@ export type Settings = {
 }
 
 export type DeskState = {
+  agentId: string
+  slug: string
   settings: Settings
   offers: Offer[]
   campaigns: Campaign[]

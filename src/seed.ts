@@ -4,6 +4,7 @@ export const DEFAULT_TRUST =
   'You get one consultant from the first message until the tickets are sent.'
 
 export const defaultSettings: Settings = {
+  slug: '',
   agencyName: 'My Travel Desk',
   agentName: 'Travel consultant',
   tagline: 'Flights, holidays, and cruises — quoted by a person.',

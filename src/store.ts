@@ -2,13 +2,20 @@ import { useEffect, useState } from 'react'
 import { blankCampaign, followUpsFor, paintChannels } from './copy'
 import { isoDate } from './format'
 import { buildWeekPlan } from './plan'
+import { connectDesk, persistLead, queueRemoteSave, usingDatabase } from './remote'
 import { defaultSettings, seedOffers } from './seed'
 import type { Campaign, Channel, DeskState, Lead, MasterBrief, Offer, Settings, StrategyId } from './types'
 
 const KEY = 'flight-desk-v1'
 
+export function blankDesk(): DeskState {
+  return { agentId: '', slug: '', settings: defaultSettings, offers: [], campaigns: [], leads: [] }
+}
+
 export function createInitialState(): DeskState {
   return buildWeekPlan({
+    agentId: '',
+    slug: '',
     settings: defaultSettings,
     offers: seedOffers,
     campaigns: [],
@@ -17,6 +24,7 @@ export function createInitialState(): DeskState {
 }
 
 function load(): DeskState {
+  if (usingDatabase()) return blankDesk()
   if (typeof localStorage === 'undefined') return createInitialState()
   try {
     const raw = localStorage.getItem(KEY)
@@ -25,7 +33,7 @@ function load(): DeskState {
     if (!parsed?.settings || !Array.isArray(parsed.offers) || !Array.isArray(parsed.campaigns) || !Array.isArray(parsed.leads)) {
       return createInitialState()
     }
-    return parsed
+    return { ...parsed, agentId: parsed.agentId ?? '', slug: parsed.slug ?? parsed.settings.slug ?? '' }
   } catch {
     return createInitialState()
   }
@@ -45,10 +53,15 @@ export function subscribe(listener: () => void) {
   }
 }
 
-export function commit(next: DeskState) {
+export function commit(next: DeskState, options?: { remote?: boolean }) {
   state = next
   if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(state))
   listeners.forEach((listener) => listener())
+  if (options?.remote !== false) queueRemoteSave()
+}
+
+export function ensureLeadSaved(lead: Lead, notifyEmail = false) {
+  return persistLead(lead, notifyEmail)
 }
 
 export function update(recipe: (current: DeskState) => DeskState) {
@@ -64,6 +77,7 @@ export function useDesk() {
 export function saveSettings(settings: Settings) {
   update((current) => ({
     ...current,
+    slug: settings.slug || current.slug,
     settings,
     campaigns: current.campaigns.map((campaign) =>
       paintChannels(campaign, settings, current.offers, { rebuildMaster: !campaign.masterEdited }),
@@ -268,6 +282,13 @@ export function isDeskState(value: unknown): value is DeskState {
 }
 
 export function resetDemo() {
-  if (typeof localStorage !== 'undefined') localStorage.removeItem(KEY)
-  commit(createInitialState())
+  const current = getState()
+  const next = createInitialState()
+  const offers = next.offers.map((offer) => ({ ...offer, id: `${(current.agentId || 'desk').slice(0, 8)}-${offer.id}` }))
+  commit(buildWeekPlan({ ...next, agentId: current.agentId, slug: current.slug, settings: current.settings, offers, campaigns: [], leads: [] }))
 }
+
+connectDesk({
+  read: () => state,
+  write: (next) => commit(next, { remote: false }),
+})
