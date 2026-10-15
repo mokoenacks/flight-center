@@ -5,8 +5,12 @@ import { useDesk } from './store'
 import { Storefront } from './Storefront'
 import { Terms } from './Terms'
 
+function isAdmin(hash: string) {
+  return hash.toLowerCase().startsWith('#/admin')
+}
+
 function isTerms(hash: string) {
-  return hash === '#/terms' || hash.startsWith('#/terms?')
+  return hash === '#/terms' || hash.toLowerCase().startsWith('#/terms?')
 }
 
 function readSlug(hash: string) {
@@ -25,8 +29,15 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    const path = window.location.pathname.replace(/\/+$/, '')
+    if (path.toLowerCase() === '/admin' && !isAdmin(window.location.hash)) {
+      window.location.replace(`${window.location.origin}${window.location.search}#/admin`)
+    }
+  }, [])
+
+  useEffect(() => {
     window.scrollTo(0, 0)
-    if (hash.startsWith('#/admin')) void openAdmin()
+    if (isAdmin(hash)) void openAdmin()
     else if (!isTerms(hash)) {
       const slug = readSlug(hash)
       if (slug) void openCustomer(slug)
@@ -35,14 +46,14 @@ export function App() {
   }, [hash])
 
   useEffect(() => {
-    document.title = hash.startsWith('#/admin')
+    document.title = isAdmin(hash)
       ? `Agent desk · ${desk.settings.agencyName}`
       : isTerms(hash)
         ? 'Terms'
         : desk.settings.agencyName
   }, [hash, desk.settings.agencyName])
 
-  if (hash.startsWith('#/admin')) return <Admin />
+  if (isAdmin(hash)) return <Admin />
   if (isTerms(hash)) return <Terms />
   return <Storefront />
 }

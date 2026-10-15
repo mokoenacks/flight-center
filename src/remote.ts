@@ -6,11 +6,15 @@ import { prettyDate } from './format'
 import type { Campaign, Channel, ChannelCopy, DeskState, FollowUp, Lead, LeadStage, MasterBrief, Offer, Palette, Settings, StrategyId, TripKind } from './types'
 import { CHANNELS } from './types'
 
-const url = (import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? import.meta.env.VITE_SUPABASE_URL ?? '').trim()
+const url = (
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL ??
+  import.meta.env.VITE_SUPABASE_URL ??
+  'https://jksnuuemyusbsvuunhkz.supabase.co'
+).trim()
 const anonKey = (
   import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   import.meta.env.VITE_SUPABASE_ANON_KEY ??
-  ''
+  'sb_publishable_JsXInJZcvUq71O_vJAC63w_j7bbXney'
 ).trim()
 const client: SupabaseClient | null =
   url.startsWith('https://') && anonKey.length > 20 ? createClient(url, anonKey) : null
@@ -231,10 +235,30 @@ export async function openIdle() {
   const gen = ++openGen
   await bootPromise
   if (gen !== openGen) return
+  if (!client || !bridge) {
+    scope = { mode: 'idle', agentId: '', slug: '', userId: '' }
+    status.view = 'ready'
+    status.error = ''
+    notify()
+    return
+  }
+  const { data, error } = await client.from('agent').select('slug').not('slug', 'is', null)
+  if (gen !== openGen) return
+  const slugs = [
+    ...new Set(
+      (data ?? [])
+        .map((row) => text((row as { slug?: unknown }).slug).toLowerCase())
+        .filter((slug) => /^[a-z0-9-]{3,40}$/.test(slug)),
+    ),
+  ]
+  if (!error && slugs.length === 1) {
+    await openCustomer(slugs[0])
+    return
+  }
   scope = { mode: 'idle', agentId: '', slug: '', userId: '' }
   status.view = 'idle'
-  status.error = ''
-  bridge?.write(emptyDesk())
+  status.error = error ? schemaHint(error.message) || LOAD_ERROR : ''
+  bridge.write(emptyDesk())
   notify()
 }
 
