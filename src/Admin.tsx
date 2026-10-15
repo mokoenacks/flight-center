@@ -161,18 +161,17 @@ function SignIn() {
     if (problem) setError(problem)
   }
 
-  const title = mode === 'create' ? 'Create your desk' : mode === 'forgot' ? 'Reset your password' : 'Sign in'
   const intro =
     mode === 'create'
-      ? 'Each consultant gets their own customer link and their own campaigns. Quote emails come to the address you use here.'
+      ? 'Create your FlightAngel account. Each consultant gets their own customer link and their own campaigns. Quote emails come to the address you use here.'
       : mode === 'forgot'
-        ? 'We email a reset link to the address on the account. It opens this desk so you can choose a new password.'
-        : 'Sign in to the desk for your customer link. Quotes sent by email also arrive in your inbox.'
+        ? 'Reset your FlightAngel password. We email a link to the address on the account, and it opens here so you can choose a new password.'
+        : 'Sign in to FlightAngel for your customer link. Quotes sent by email also arrive in your inbox.'
 
   return (
     <div className="desk">
       <main className="workspace">
-        <h1 className="page-title">{title}</h1>
+        <h1 className="page-title">FlightAngel</h1>
         <p className="intro">{intro}</p>
         <form className="panel signin" onSubmit={submit}>
           <Field label="Email">
@@ -250,7 +249,7 @@ export function ResetPassword({ email }: { email: string }) {
         <h1 className="page-title">Choose a new password</h1>
         <p className="intro">
           {email ? `This reset is for ${email}. ` : ''}
-          After you save it, this desk opens with the new password.
+          After you save it, FlightAngel opens with the new password.
         </p>
         <form className="panel signin" onSubmit={submit}>
           <Field label="New password">
@@ -409,7 +408,7 @@ function Today({
         <h2>Share one link</h2>
         <p>
           Put this WhatsApp link in your Instagram, TikTok, Facebook, and LinkedIn bios. People message you from their
-          own phones. This desk does not log into those apps.
+          own phones. FlightAngel does not log into those apps.
         </p>
         {link ? (
           <div className="actions">
@@ -1166,7 +1165,7 @@ function Contacts() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'flight-desk-backup.json'
+    link.download = 'flightangel-backup.json'
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -1254,7 +1253,7 @@ function Contacts() {
       </form>
       <section className="panel">
         <h2>Keep a copy</h2>
-        <p>Download a backup into this folder if you want the same desk on another computer. Import replaces what is on this one.</p>
+        <p>Download a backup if you want the same FlightAngel page on another computer. Import replaces what is on this one.</p>
         <div className="actions">
           <button type="button" className="btn quiet" onClick={exportBackup}>
             Download backup
@@ -1288,9 +1287,9 @@ function Contacts() {
             type="button"
             className="btn quiet"
             onClick={() => {
-              if (window.confirm('Replace everything with the sample desk?')) {
+              if (window.confirm('Replace everything with the FlightAngel samples?')) {
                 resetDemo()
-                setMessage('Sample desk restored.')
+                setMessage('FlightAngel samples restored.')
               }
             }}
           >

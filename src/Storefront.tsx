@@ -177,7 +177,7 @@ export function Storefront() {
     return (
       <div className="store">
         <main className="gate">
-          <h1>Opening this desk…</h1>
+          <h1>Opening FlightAngel…</h1>
         </main>
       </div>
     )
@@ -205,12 +205,12 @@ export function Storefront() {
     <div className="store">
       {settings.preview && (
         <div className="preview-banner">
-          Preview mode. These from-prices are samples until you edit them and mark the desk ready to share.
+          Preview mode. These from-prices are samples until you edit them and mark FlightAngel ready to share.
         </div>
       )}
       <header className="top">
         <div className="brand-block">
-          <p className="city-line">{settings.city || 'Travel desk'}</p>
+          <p className="city-line">{settings.city || 'FlightAngel'}</p>
           <p className="word">{settings.agencyName}</p>
           <p className="tagline">{settings.tagline}</p>
         </div>

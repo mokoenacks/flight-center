@@ -19,9 +19,9 @@ export function Terms() {
         <p className="kicker">Terms</p>
         <h1>What this website collects</h1>
         <p>
-          This is a travel desk page. The consultant whose link you opened uses it to show sample trips and take a
-          quote. A quote is a request for a person to check a fare. It is not a booking, and a from-price on the page
-          is not a ticket until that consultant confirms it.
+          This is FlightAngel. The consultant whose link you opened uses it to show sample trips and take a quote. A
+          quote is a request for a person to check a fare. It is not a booking, and a from-price on the page is not a
+          ticket until that consultant confirms it.
         </p>
 
         <h2>When you only look</h2>
@@ -32,7 +32,7 @@ export function Terms() {
           <li>The date and time of that visit.</li>
         </ul>
         <p>
-          Refreshing the same page does not add another visit. The consultant sees the counts on their desk. They do
+          Refreshing the same page does not add another visit. The consultant sees the counts in FlightAngel. They do
           not see your name from a visit.
         </p>
 
@@ -51,7 +51,7 @@ export function Terms() {
 
         <h2>Who else handles it</h2>
         <p>
-          The desk is stored in Supabase. This website is hosted on Render. Render keeps ordinary connection logs,
+          FlightAngel stores quotes and visits in Supabase. This website is hosted on Render. Render keeps ordinary connection logs,
           including an IP address, so it can deliver the page. Those host logs are not part of the visitor report, and
           this site does not sell your details.
         </p>

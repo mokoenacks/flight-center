@@ -76,7 +76,7 @@ function contactLine(settings: Settings) {
   if (settings.whatsapp.trim()) bits.push(`WhatsApp ${settings.whatsapp.trim()}`)
   if (settings.phone.trim()) bits.push(`call ${settings.phone.trim()}`)
   if (settings.email.trim()) bits.push(settings.email.trim())
-  const agency = settings.agencyName.trim() || 'the desk'
+  const agency = settings.agencyName.trim() || 'FlightAngel'
   if (!bits.length) return `Message ${agency} and ask for a checked quote.`
   return `Reach ${agency} on ${bits.join(' · ')}.`
 }
@@ -394,7 +394,7 @@ export function followUpsFor(
   const place = lead.to.trim() || 'your trip'
   const dates = lead.dates.trim() || 'the dates you mentioned'
   const people = lead.travellers.trim() || 'your group'
-  const agency = settings.agencyName.trim() || 'the travel desk'
+  const agency = settings.agencyName.trim() || 'FlightAngel'
   return [
     {
       id: crypto.randomUUID(),

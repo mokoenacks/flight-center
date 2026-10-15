@@ -93,13 +93,18 @@ export function App() {
   }, [hash])
 
   useEffect(() => {
+    const agency = desk.settings.agencyName.trim()
     document.title = isReset(hash)
-      ? 'Reset password'
+      ? 'Reset password · FlightAngel'
       : isAdmin(hash)
-        ? `Agent desk · ${desk.settings.agencyName}`
+        ? agency
+          ? `FlightAngel · ${agency}`
+          : 'FlightAngel'
         : isTerms(hash)
-          ? 'Terms'
-          : desk.settings.agencyName
+          ? 'Terms · FlightAngel'
+          : agency
+            ? `${agency} · FlightAngel`
+            : 'FlightAngel'
   }, [hash, desk.settings.agencyName])
 
   if (isReset(hash)) return <ResetPage />

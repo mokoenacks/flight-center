@@ -30,7 +30,7 @@ const client: SupabaseClient | null =
 const SAVE_ERROR = 'The database did not save. Run supabase/multi-agent.sql in the Supabase SQL editor, then sign in again.'
 const LOAD_ERROR = 'The database did not answer. Check the Supabase URL and publishable key in .env.'
 const SCHEMA_ERROR = 'Run supabase/multi-agent.sql in the Supabase SQL editor, then refresh.'
-const QUOTE_ERROR = 'The quote did not reach the desk. Try again.'
+const QUOTE_ERROR = 'The quote did not reach FlightAngel. Try again.'
 const MAIL_ERROR = 'Your quote is saved. The email to the consultant did not send.'
 const RESERVED_SLUGS = new Set(['admin', 'a', 'api'])
 
@@ -423,7 +423,7 @@ async function claimAgent(): Promise<{ id: string; slug: string; userId: string 
   const { data: userData, error: userError } = await client.auth.getUser()
   const user = userData.user
   if (userError || !user) {
-    status.error = 'Sign in again to open your desk.'
+    status.error = 'Sign in again to open FlightAngel.'
     return null
   }
   const { data: mine, error: mineError } = await client.from('agent').select('*').eq('user_id', user.id).maybeSingle()

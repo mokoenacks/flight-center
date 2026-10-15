@@ -1,14 +1,14 @@
--- Flight Desk
+-- FlightAngel
 -- Run this whole script once in the Supabase SQL editor.
 --
 -- After it succeeds:
 -- 1. Authentication → Users → Add user. Choose an email and password for yourself.
 -- 2. Project Settings → API. Copy the Project URL and the anon public key.
--- 3. In the Flight center folder, create a file named .env with:
+-- 3. In the project folder, create a file named .env with:
 --      VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 --      VITE_SUPABASE_ANON_KEY=your_anon_public_key
--- 4. Restart the desk, open http://localhost:5173/#/admin, and sign in.
---    The first sign-in copies this computer's desk into the database.
+-- 4. Restart FlightAngel, open http://localhost:5173/#/admin, and sign in.
+--    The first sign-in copies this computer's page into the database.
 --
 -- Customers can read the profile, offers, and campaigns.
 -- Customers can add a quote. Only a signed-in agent can read or change quotes.
