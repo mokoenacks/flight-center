@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Admin, ResetPassword } from './Admin'
 import { openAdmin, openCustomer, openIdle, useRemoteStatus } from './remote'
 import { useDesk } from './store'
+import { Feed } from './Feed'
 import { Storefront } from './Storefront'
 import { Terms } from './Terms'
 
@@ -58,6 +59,11 @@ function readSlug(hash: string) {
   return match?.[1] ?? ''
 }
 
+function isFeed(hash: string) {
+  const clean = hash.toLowerCase()
+  return clean === '' || clean === '#' || clean === '#/' || clean.startsWith('#/feed')
+}
+
 export function App() {
   const [hash, setHash] = useState(() => window.location.hash)
   const desk = useDesk()
@@ -85,6 +91,7 @@ export function App() {
     window.scrollTo(0, 0)
     if (isAdmin(hash)) void openAdmin()
     else if (isReset(hash)) return
+    else if (isFeed(hash)) return
     else if (!isTerms(hash)) {
       const slug = readSlug(hash)
       if (slug) void openCustomer(slug)
@@ -100,13 +107,16 @@ export function App() {
         ? 'FlightAngel'
         : isTerms(hash)
           ? 'Terms · FlightAngel'
-          : agency
-            ? `${agency} · FlightAngel`
-            : 'FlightAngel'
+          : isFeed(hash)
+            ? 'FlightAngel'
+            : agency
+              ? `${agency} · FlightAngel`
+              : 'FlightAngel'
   }, [hash, desk.settings.agencyName])
 
   if (isReset(hash)) return <ResetPage />
   if (isAdmin(hash)) return <Admin />
   if (isTerms(hash)) return <Terms />
+  if (isFeed(hash)) return <Feed />
   return <Storefront />
 }

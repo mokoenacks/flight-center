@@ -741,6 +741,140 @@ function leadToRow(lead: Lead) {
   }
 }
 
+const BOARD_SQL = 'Run supabase/bids.sql in the Supabase SQL editor, then refresh.'
+
+export type PriceBid = {
+  id: string
+  agentId: string
+  agentName: string
+  agencyName: string
+  price: number
+  includes: string
+  createdAt: string
+}
+
+export type TripPost = {
+  id: string
+  name: string
+  destination: string
+  dates: string
+  travellers: string
+  note: string
+  sample: boolean
+  createdAt: string
+  bids: PriceBid[]
+}
+
+export async function loadBoard(): Promise<{ posts: TripPost[]; error: string }> {
+  if (!client) return { posts: [], error: '' }
+  const { data, error } = await client
+    .from('trip_asks')
+    .select('id, name, destination, dates, travellers, note, sample, created_at, bids(id, agent_id, agent_name, agency_name, price, includes, created_at)')
+    .order('created_at', { ascending: false })
+    .limit(40)
+  if (error) return { posts: [], error: boardHint(error.message) }
+  const posts = (data ?? []).map((row) => {
+    const record = row as Record<string, unknown>
+    const bids = Array.isArray(record.bids) ? record.bids : []
+    return {
+      id: text(record.id),
+      name: text(record.name),
+      destination: text(record.destination),
+      dates: text(record.dates),
+      travellers: text(record.travellers),
+      note: text(record.note),
+      sample: Boolean(record.sample),
+      createdAt: text(record.created_at),
+      bids: bids
+        .map((item) => {
+          const bid = item as Record<string, unknown>
+          return {
+            id: text(bid.id),
+            agentId: text(bid.agent_id),
+            agentName: text(bid.agent_name),
+            agencyName: text(bid.agency_name),
+            price: Number(bid.price) || 0,
+            includes: text(bid.includes),
+            createdAt: text(bid.created_at),
+          }
+        })
+        .filter((bid) => bid.price > 0)
+        .sort((a, b) => a.price - b.price || a.createdAt.localeCompare(b.createdAt)),
+    }
+  })
+  return { posts, error: '' }
+}
+
+export async function postTripAsk(input: {
+  name: string
+  destination: string
+  dates: string
+  travellers: string
+  note: string
+}): Promise<string> {
+  if (!client) return 'The database is not connected.'
+  const name = input.name.trim()
+  const destination = input.destination.trim()
+  if (name.length < 1 || destination.length < 1) return 'Add your name and where you want to go.'
+  const { error } = await client.from('trip_asks').insert({
+    name: name.slice(0, 80),
+    destination: destination.slice(0, 80),
+    dates: input.dates.trim().slice(0, 80),
+    travellers: input.travellers.trim().slice(0, 40),
+    note: input.note.trim().slice(0, 280),
+    sample: false,
+  })
+  return error ? boardHint(error.message) : ''
+}
+
+export async function placeBid(input: {
+  requestId: string
+  bidId: string
+  agentName: string
+  agencyName: string
+  price: number
+  includes: string
+  previousPrice: number
+  floor: number
+}): Promise<string> {
+  if (!client) return 'The database is not connected.'
+  if (!signedIn || !scope.agentId) return 'Sign in on the agent desk before you post a price.'
+  const price = Math.round(input.price)
+  if (!Number.isFinite(price) || price < 1) return 'Enter a price in rands.'
+  if (input.previousPrice > 0 && price >= input.previousPrice) {
+    return 'Your new price has to be lower than the one you already posted.'
+  }
+  const beat = input.floor > 0 && input.floor < (input.previousPrice || Number.POSITIVE_INFINITY) ? input.floor : 0
+  if (beat > 0 && price >= beat) {
+    return 'Go lower than the lowest price already on this trip.'
+  }
+  const agentName = input.agentName.trim().slice(0, 80) || 'Agent'
+  const agencyName = input.agencyName.trim().slice(0, 80)
+  const includes = input.includes.trim().slice(0, 180)
+  const { error } = input.bidId
+    ? await client
+        .from('bids')
+        .update({ price, includes, agent_name: agentName, agency_name: agencyName })
+        .eq('id', input.bidId)
+    : await client.from('bids').insert({
+        request_id: input.requestId,
+        agent_id: scope.agentId,
+        agent_name: agentName,
+        agency_name: agencyName,
+        price,
+        includes,
+      })
+  if (!error) return ''
+  if (/lower than your last/i.test(error.message)) return 'Your new price has to be lower than the one you already posted.'
+  if (/lowest one on this trip/i.test(error.message)) return 'Go lower than the lowest price already on this trip.'
+  return boardHint(error.message)
+}
+
+function boardHint(message: string) {
+  if (/trip_asks|bids|schema cache|current_agent_id/i.test(message)) return BOARD_SQL
+  return message || BOARD_SQL
+}
+
 function text(value: unknown) {
   return typeof value === 'string' ? value : ''
 }

@@ -321,8 +321,47 @@ a { color: inherit; }
 .playbooks ol { margin: 10px 0; padding-left: 18px; }
 .playbooks li + li { margin-top: 6px; }
 
+.feed .word { margin-bottom: 8px; }
+.board { display: grid; gap: 16px; margin-top: 18px; }
+.post-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.post-card h2 { font-size: clamp(28px, 4vw, 40px); margin: 12px 0 6px; }
+.post-head, .bid-thread li { display: flex; gap: 12px; align-items: flex-start; }
+.post-head p, .post-meta, .post-note, .post-low { color: var(--ink-soft); }
+.post-head strong { display: block; }
+.post-note { margin-top: 8px; }
+.post-low { margin-top: 12px; font-weight: 650; }
+.post-low b { color: var(--ink); }
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--sea);
+  color: var(--paper);
+  font-weight: 800;
+  flex: none;
+}
+.avatar.small { width: 32px; height: 32px; font-size: 14px; background: #2f5c56; }
+.kicker { text-transform: uppercase; letter-spacing: 0.14em; font-size: 12px; font-weight: 800; color: var(--coral); }
+.composer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.bid-thread { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+.bid-thread li { background: #f6f3ec; border-radius: 16px; padding: 10px 12px; }
+.bid-thread li.lowest { background: #e7f3ee; }
+.bid-thread p { color: var(--ink-soft); font-size: 14px; }
+.bid-thread b { display: block; font-size: 20px; margin: 2px 0; }
+.bid-thread .pill { margin-left: 8px; }
+.bid-box { display: grid; gap: 0; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bid-box .field { margin-bottom: 8px; }
+
 @media (max-width: 980px) {
-  .hero, .cards, .steps, .stories, .split, .split.wide, .stats, .playbooks, .grid-2, .checklist { grid-template-columns: 1fr; }
+  .hero, .cards, .steps, .stories, .split, .split.wide, .stats, .playbooks, .grid-2, .checklist, .composer-grid { grid-template-columns: 1fr; }
   .desk { grid-template-columns: 1fr; }
   .rail { position: sticky; height: auto; z-index: 5; flex-direction: row; overflow: auto; align-items: center; }
   .rail-link, .rail-foot { margin-top: 0; }

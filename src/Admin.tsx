@@ -44,12 +44,14 @@ import {
 } from './store'
 import type { Campaign, Channel, Lead, LeadStage, Offer, Palette, Settings, StrategyId, TripKind } from './types'
 import { CHANNELS, CHANNEL_META, KIND_LABEL } from './types'
+import { PriceBoard } from './Feed'
 import { CopyButton, Field } from './ui'
 
-type Tab = 'today' | 'offers' | 'campaigns' | 'leads' | 'playbooks' | 'settings'
+type Tab = 'today' | 'bids' | 'offers' | 'campaigns' | 'leads' | 'playbooks' | 'settings'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'today', label: 'Today' },
+  { id: 'bids', label: 'Prices' },
   { id: 'offers', label: 'Offers' },
   { id: 'campaigns', label: 'Campaigns' },
   { id: 'leads', label: 'Leads' },
@@ -126,6 +128,13 @@ export function Admin() {
         )}
         {remote.error && <p className="warnline">{remote.error}</p>}
         {tab === 'today' && <Today flash={flash} setFlash={setFlash} onOpen={openCampaign} />}
+        {tab === 'bids' && (
+          <div>
+            <h1 className="page-title">Prices</h1>
+            <p className="intro">Open trips are on the board. Post a price. The next price on a trip has to be lower than the lowest one already there.</p>
+            <PriceBoard canBid />
+          </div>
+        )}
         {tab === 'offers' && <Offers />}
         {tab === 'campaigns' && <Campaigns campaignId={campaignId} setCampaignId={setCampaignId} />}
         {tab === 'leads' && <Leads />}
